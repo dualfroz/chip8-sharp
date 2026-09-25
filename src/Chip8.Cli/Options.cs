@@ -18,15 +18,20 @@ sealed class Options
     public string? screenshotPath;
     public string? dumpPpmPath;
     public string? dumpWavPath;
+    public string? recordPath;
 
-    public Platform buildPlatform() => platformName.ToLowerInvariant() switch
+    public Platform buildPlatform() => platformFrom(platformName);
+
+    public Quirks? buildQuirks() => quirksFrom(quirksProfile);
+
+    public static Platform platformFrom(string name) => name.ToLowerInvariant() switch
     {
         "superchip" or "schip" => Platform.SuperChip,
         "xochip" or "xo" => Platform.XoChip,
         _ => Platform.Chip8,
     };
 
-    public Quirks? buildQuirks() => quirksProfile.ToLowerInvariant() switch
+    public static Quirks? quirksFrom(string name) => name.ToLowerInvariant() switch
     {
         "auto" => null,
         "cosmac" => Quirks.cosmacVip(),
@@ -93,6 +98,10 @@ sealed class Options
                     break;
                 case "--wav":
                     options.dumpWavPath = args[++index];
+                    index++;
+                    break;
+                case "--record":
+                    options.recordPath = CliArgs.value(args, ref index);
                     index++;
                     break;
                 default:

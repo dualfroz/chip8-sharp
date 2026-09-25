@@ -66,6 +66,34 @@ public sealed class ReachabilitySet
         return linear.Where(info => !reachable.Contains(info.address)).ToList();
     }
 
+    public IReadOnlyList<InstructionInfo> unreachableInstructions(byte[] program)
+    {
+        var covered = reachableByteAddresses();
+        var instructions = new List<InstructionInfo>();
+        int offset = 0;
+        while (offset + 1 < programLength)
+        {
+            ushort address = (ushort)(baseAddress + offset);
+            if (covered.Contains(address))
+            {
+                offset++;
+                continue;
+            }
+
+            InstructionInfo info = InstructionDecoder.decodeAt(program, address, baseAddress)!;
+            bool runsIntoCode = Enumerable.Range(1, info.byteLength - 1).Any(step => covered.Contains((ushort)(address + step)));
+            if (runsIntoCode)
+            {
+                offset++;
+                continue;
+            }
+
+            instructions.Add(info);
+            offset += info.byteLength;
+        }
+        return instructions;
+    }
+
     public IReadOnlyList<ushort> dataByteAddresses()
     {
         var covered = reachableByteAddresses();

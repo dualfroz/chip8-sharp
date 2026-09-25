@@ -3,6 +3,7 @@ using System.IO;
 using Chip8.Core;
 using Chip8.Core.Audio;
 using Chip8.Core.Export;
+using Chip8.Replay;
 
 namespace Chip8.Cli;
 
@@ -10,20 +11,36 @@ static class Program
 {
     static int Main(string[] args)
     {
-        if (args.Length == 0 || args[0] == "-h" || args[0] == "--help")
+        if (args.Length == 0 || CliArgs.isHelp(args))
         {
             printUsage();
             return args.Length == 0 ? 1 : 0;
         }
 
-        switch (args[0])
+        try
         {
-            case "asm":
-                return AsmCommand.run(args[1..]);
-            case "disasm":
-                return DisasmCommand.run(args[1..]);
-            case "debug":
-                return TuiDebugger.run(args[1..]);
+            switch (args[0])
+            {
+                case "asm":
+                    return AsmCommand.run(args[1..]);
+                case "disasm":
+                    return DisasmCommand.run(args[1..]);
+                case "debug":
+                    return TuiDebugger.run(args[1..]);
+                case "analyze":
+                    return AnalyzeCommand.run(args[1..]);
+                case "replay":
+                    return ReplayCommand.run(args[1..]);
+                case "bench":
+                    return BenchCommand.run(args[1..]);
+                case "conformance":
+                    return ConformanceCommand.run(args[1..]);
+            }
+        }
+        catch (ArgumentException error)
+        {
+            Console.Error.WriteLine($"error: {error.Message}");
+            return 1;
         }
 
         Options options;
@@ -44,6 +61,11 @@ static class Program
             return 1;
         }
 
+        if (options.recordPath is not null && options.seed is null)
+        {
+            options.seed = Random.Shared.Next();
+        }
+
         byte[] rom = File.ReadAllBytes(options.romPath);
         var machine = new Machine(options.buildQuirks(), options.seed, options.buildPlatform());
         machine.loadRom(rom);
@@ -53,7 +75,17 @@ static class Program
             return runHeadless(machine, options);
         }
 
-        RaylibFrontend.run(machine, options);
+        InputMovie? recording = options.recordPath is null
+            ? null
+            : MachineBuilder.headerFor(machine, rom, Path.GetFileName(options.romPath), options.instructionsPerFrame, options.seed);
+
+        RaylibFrontend.run(machine, options, recording);
+
+        if (recording is not null)
+        {
+            ReplayCommand.writeMovie(recording, options.recordPath!, ReplayCommand.prefersBinary(options.recordPath!));
+            Console.WriteLine($"recorded {recording.length} frames ({recording.entryCount} with keys held) -> {options.recordPath}");
+        }
         return 0;
     }
 
@@ -110,13 +142,18 @@ static class Program
 
     static void printUsage()
     {
-        Console.WriteLine("chip8-sharp - CHIP-8 / SUPER-CHIP / XO-CHIP emulator");
+        Console.WriteLine("chip8-sharp - CHIP-8 / SUPER-CHIP / XO-CHIP emulator and toolchain");
         Console.WriteLine();
-        Console.WriteLine("usage: chip8 <rom> [options]");
-        Console.WriteLine("       chip8 asm <source.asm> [-o out.ch8] [--listing]");
-        Console.WriteLine("       chip8 disasm <rom.ch8> [--base 0x200]");
-        Console.WriteLine("       chip8 debug <rom.ch8> [--platform NAME]");
+        Console.WriteLine("usage: chip8 <rom> [options]               run a ROM in a window (or headless)");
+        Console.WriteLine("       chip8 asm <source> [options]        assemble CHIP-8 mnemonics or Octo source");
+        Console.WriteLine("       chip8 disasm <rom> [--base 0x200]   disassemble a ROM");
+        Console.WriteLine("       chip8 debug <rom> [options]         interactive debugger");
+        Console.WriteLine("       chip8 analyze <rom> [options]       static and dynamic ROM analysis");
+        Console.WriteLine("       chip8 replay <record|play|info> ... record and replay input movies");
+        Console.WriteLine("       chip8 bench <rom> [options]         measure emulation speed");
+        Console.WriteLine("       chip8 conformance [--roms DIR]      run the bundled test ROM expectations");
         Console.WriteLine();
+        Console.WriteLine("run options:");
         Console.WriteLine("  --headless        run without a window, dump the framebuffer as ASCII");
         Console.WriteLine("  --cycles N        instructions to run in headless mode (default 2000)");
         Console.WriteLine("  --ipf N           instructions per 60Hz frame (default 11)");
@@ -127,7 +164,11 @@ static class Program
         Console.WriteLine("  --palette NAME    octo (default), mono, grayscale, extended16");
         Console.WriteLine("  --ppm PATH        export the final frame as a PPM image");
         Console.WriteLine("  --wav PATH        export the buzzer audio as a WAV file");
+        Console.WriteLine("  --frames N        window mode: close after N frames");
+        Console.WriteLine("  --shot PATH       window mode: save a PNG screenshot before closing");
+        Console.WriteLine("  --record PATH     window mode: record keyboard input to a movie file");
         Console.WriteLine();
+        Console.WriteLine("run 'chip8 <command> --help' for the options of a command");
         Console.WriteLine("keys: 1234/QWER/ASDF/ZXCV map to the CHIP-8 hex pad");
     }
 }

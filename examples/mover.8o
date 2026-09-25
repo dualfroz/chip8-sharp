@@ -1,0 +1,64 @@
+:alias ball-x va
+:alias ball-y vb
+:alias moves vc
+
+:const KEY-UP 5
+:const KEY-DOWN 8
+:const KEY-LEFT 7
+:const KEY-RIGHT 9
+
+:macro step-if KEY AXIS AMOUNT {
+  v0 := KEY
+  if v0 key begin
+    draw-all
+    AXIS += AMOUNT
+    moves += 1
+    draw-all
+  end
+}
+
+: ball
+  0x60 0xF0 0xF0 0x60
+
+: digits
+  0 0 0
+
+: draw-all
+  i := ball
+  sprite ball-x ball-y 4
+  i := digits
+  bcd moves
+  load v2
+  v3 := 0
+  v4 := 0
+  i := hex v0
+  sprite v3 v4 5
+  v3 := 5
+  i := hex v1
+  sprite v3 v4 5
+  v3 := 10
+  i := hex v2
+  sprite v3 v4 5
+;
+
+: wait-frame
+  v0 := 1
+  delay := v0
+  loop
+    v0 := delay
+    while v0 != 0
+  again
+;
+
+: main
+  ball-x := 30
+  ball-y := 14
+  moves := 0
+  draw-all
+  loop
+    step-if KEY-UP ball-y -1
+    step-if KEY-DOWN ball-y 1
+    step-if KEY-LEFT ball-x -1
+    step-if KEY-RIGHT ball-x 1
+    wait-frame
+  again

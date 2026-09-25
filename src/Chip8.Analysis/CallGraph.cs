@@ -88,7 +88,7 @@ public sealed class CallGraph
         }
 
         markRecursion(nodeByAddress);
-        var orphans = findOrphans(program, baseAddress, nodeByAddress);
+        var orphans = findOrphans(program, entry, baseAddress);
         return new CallGraph(entry, baseAddress, nodeByAddress, orphans);
     }
 
@@ -186,18 +186,23 @@ public sealed class CallGraph
         return false;
     }
 
-    static List<ushort> findOrphans(byte[] program, ushort baseAddress, Dictionary<ushort, CallNode> nodeByAddress)
+    static List<ushort> findOrphans(byte[] program, ushort entry, ushort baseAddress)
     {
+        var reachability = ReachabilitySet.build(program, entry, baseAddress);
+        HashSet<ushort> reachableBytes = reachability.reachableByteAddresses();
         var orphans = new SortedSet<ushort>();
-        foreach (var info in InstructionDecoder.decodeLinear(program, baseAddress))
+        foreach (var info in reachability.unreachableInstructions(program))
         {
-            if (info.kind == InstructionKind.Call)
+            if (info.kind != InstructionKind.Call)
             {
-                ushort target = info.callTarget!.Value;
-                if (!nodeByAddress.ContainsKey(target))
-                {
-                    orphans.Add(target);
-                }
+                continue;
+            }
+
+            ushort target = info.callTarget!.Value;
+            var targetInstruction = InstructionDecoder.decodeAt(program, target, baseAddress);
+            if (targetInstruction is { kind: not InstructionKind.Data } && !reachableBytes.Contains(target))
+            {
+                orphans.Add(target);
             }
         }
         return orphans.ToList();

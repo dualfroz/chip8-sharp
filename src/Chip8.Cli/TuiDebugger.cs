@@ -8,10 +8,14 @@ static class TuiDebugger
 {
     public static int run(string[] args)
     {
-        if (args.Length < 1)
+        if (args.Length < 1 || CliArgs.isHelp(args))
         {
-            Console.Error.WriteLine("usage: chip8 debug <rom.ch8> [--platform NAME]");
-            return 1;
+            Console.WriteLine("usage: chip8 debug <rom.ch8> [--platform NAME] [--quirks NAME] [--seed N]");
+            Console.WriteLine();
+            Console.WriteLine("Interactive console debugger: stepping, step over, breakpoints, memory and register");
+            Console.WriteLine("watchpoints, register and memory dumps, disassembly around PC. Type 'help' at the");
+            Console.WriteLine("(chip8) prompt for the command list.");
+            return args.Length < 1 ? 1 : 0;
         }
 
         var forwarded = new string[args.Length];

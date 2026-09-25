@@ -9,10 +9,15 @@ static class DisasmCommand
 {
     public static int run(string[] args)
     {
-        if (args.Length < 1)
+        if (args.Length < 1 || CliArgs.isHelp(args))
         {
-            Console.Error.WriteLine("usage: chip8 disasm <rom.ch8> [--base 0x200]");
-            return 1;
+            Console.WriteLine("usage: chip8 disasm <rom.ch8> [--base 0x200]");
+            Console.WriteLine();
+            Console.WriteLine("Linear disassembly of every 16-bit word, including SUPER-CHIP and XO-CHIP opcodes");
+            Console.WriteLine("(the 4-byte 'i := long' load is decoded as one instruction).");
+            Console.WriteLine();
+            Console.WriteLine("  --base ADDR       address of the first byte (default 0x200)");
+            return args.Length < 1 ? 1 : 0;
         }
 
         string romPath = args[0];

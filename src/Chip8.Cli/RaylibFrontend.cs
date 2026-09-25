@@ -1,6 +1,8 @@
 using System;
 using System.IO;
+using System.Numerics;
 using Chip8.Core;
+using Chip8.Replay;
 using Raylib_cs;
 
 namespace Chip8.Cli;
@@ -15,29 +17,40 @@ static class RaylibFrontend
         (0xA, KeyboardKey.KEY_Z), (0x0, KeyboardKey.KEY_X), (0xB, KeyboardKey.KEY_C), (0xF, KeyboardKey.KEY_V),
     };
 
-    static readonly Color background = new(15, 15, 20, 255);
-    static readonly Color foreground = new(180, 240, 200, 255);
+    static readonly Color letterbox = new(15, 15, 20, 255);
 
-    public static void run(Machine machine, Options options)
+    public static void run(Machine machine, Options options, InputMovie? recording = null, InputMovie? playback = null)
     {
-        int width = Machine.displayWidth * options.scale;
-        int height = Machine.displayHeight * options.scale;
+        int instructionsPerFrame = playback?.instructionsPerFrame ?? options.instructionsPerFrame;
+        Palette palette = options.buildPalette();
+        (int width, int height) = FrameLayout.windowSize(machine.platform, options.scale);
 
+        Raylib.SetConfigFlags(ConfigFlags.FLAG_WINDOW_RESIZABLE);
         Raylib.InitWindow(width, height, "chip8-sharp");
+        Raylib.SetWindowMinSize(Video.loWidth, Video.loHeight);
         Raylib.SetTargetFPS(60);
         Raylib.InitAudioDevice();
 
         AudioStream beep = Raylib.LoadAudioStream(44100, 16, 1);
         Raylib.PlayAudioStream(beep);
         var phase = new BeepPhase();
+        Texture2D? screen = null;
 
         int frame = 0;
         while (!Raylib.WindowShouldClose())
         {
-            pumpInput(machine);
-            machine.runFrame(options.instructionsPerFrame);
+            if (playback is not null)
+            {
+                playback.keysAt(frame).applyTo(machine.keypad);
+            }
+            else
+            {
+                pumpInput(machine);
+            }
+            recording?.recordFrame(frame, KeyMask.fromKeypad(machine.keypad));
+            machine.runFrame(instructionsPerFrame);
             feedAudio(beep, machine.soundActive, phase);
-            draw(machine, options.scale);
+            screen = draw(screen, FrameImage.fromMachine(machine, palette));
 
             frame++;
             if (options.maxFrames > 0 && frame >= options.maxFrames)
@@ -47,6 +60,10 @@ static class RaylibFrontend
             }
         }
 
+        if (screen is not null)
+        {
+            Raylib.UnloadTexture(screen.Value);
+        }
         Raylib.UnloadAudioStream(beep);
         Raylib.CloseAudioDevice();
         Raylib.CloseWindow();
@@ -85,23 +102,39 @@ static class RaylibFrontend
         }
     }
 
-    static void draw(Machine machine, int scale)
+    static Texture2D draw(Texture2D? screen, FrameImage image)
     {
-        Raylib.BeginDrawing();
-        Raylib.ClearBackground(background);
+        Texture2D texture = textureFor(screen, image.width, image.height);
+        Raylib.UpdateTexture(texture, image.rgba);
 
-        for (int y = 0; y < Machine.displayHeight; y++)
+        FrameLayout layout = FrameLayout.fit(image.width, image.height, Raylib.GetScreenWidth(), Raylib.GetScreenHeight());
+        var source = new Rectangle(0, 0, image.width, image.height);
+        var target = new Rectangle(layout.x, layout.y, layout.width, layout.height);
+
+        Raylib.BeginDrawing();
+        Raylib.ClearBackground(letterbox);
+        Raylib.DrawTexturePro(texture, source, target, Vector2.Zero, 0, Color.WHITE);
+        Raylib.EndDrawing();
+
+        return texture;
+    }
+
+    static Texture2D textureFor(Texture2D? screen, int width, int height)
+    {
+        if (screen is { } current && current.width == width && current.height == height)
         {
-            for (int x = 0; x < Machine.displayWidth; x++)
-            {
-                if (machine.display[y * Machine.displayWidth + x])
-                {
-                    Raylib.DrawRectangle(x * scale, y * scale, scale, scale, foreground);
-                }
-            }
+            return current;
+        }
+        if (screen is not null)
+        {
+            Raylib.UnloadTexture(screen.Value);
         }
 
-        Raylib.EndDrawing();
+        Image blank = Raylib.GenImageColor(width, height, Color.BLACK);
+        Texture2D texture = Raylib.LoadTextureFromImage(blank);
+        Raylib.UnloadImage(blank);
+        Raylib.SetTextureFilter(texture, TextureFilter.TEXTURE_FILTER_POINT);
+        return texture;
     }
 
     static void feedAudio(AudioStream beep, bool active, BeepPhase phase)

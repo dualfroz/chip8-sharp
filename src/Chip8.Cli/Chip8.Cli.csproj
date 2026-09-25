@@ -17,6 +17,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Chip8.Core\Chip8.Core.csproj" />
+    <ProjectReference Include="..\Chip8.Analysis\Chip8.Analysis.csproj" />
+    <ProjectReference Include="..\Chip8.OctoAsm\Chip8.OctoAsm.csproj" />
+    <ProjectReference Include="..\Chip8.Replay\Chip8.Replay.csproj" />
   </ItemGroup>
 
 </Project>

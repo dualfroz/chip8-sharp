@@ -18,18 +18,19 @@ public sealed class RomLibrary
 
     public static RomLibrary locate()
     {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "roms")))
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
         {
-            dir = dir.Parent;
+            foreach (string candidate in new[] { "roms", Path.Combine("tests", "roms") })
+            {
+                string path = Path.Combine(dir.FullName, candidate);
+                if (Directory.Exists(path))
+                {
+                    return new RomLibrary(path);
+                }
+            }
         }
 
-        if (dir is null)
-        {
-            throw new DirectoryNotFoundException("could not locate a 'roms' directory above " + AppContext.BaseDirectory);
-        }
-
-        return new RomLibrary(Path.Combine(dir.FullName, "roms"));
+        throw new DirectoryNotFoundException("could not locate a 'roms' or 'tests/roms' directory above " + AppContext.BaseDirectory);
     }
 
     public bool has(string name) => File.Exists(pathOf(name));

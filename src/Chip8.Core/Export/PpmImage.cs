@@ -6,56 +6,45 @@ namespace Chip8.Core.Export;
 
 public static class PpmImage
 {
-    public static byte[] fromMonochrome(bool[] pixels, int width, int height, Palette palette, int scale = 1)
-    {
-        if (pixels.Length < width * height)
-        {
-            throw new ArgumentException("pixel buffer is smaller than " + width + "x" + height, nameof(pixels));
-        }
-        return build(width, height, scale, palette, (x, y) => pixels[y * width + x] ? 1 : 0);
-    }
+    public static byte[] fromMonochrome(bool[] pixels, int width, int height, Palette palette, int scale = 1) =>
+        fromFrame(FrameImage.fromMonochrome(pixels, width, height, palette), scale);
 
     public static byte[] fromVideo(Video video, Palette palette, int scale = 1) =>
-        build(video.width, video.height, scale, palette, video.colorAt);
+        fromFrame(FrameImage.fromVideo(video, palette), scale);
 
-    public static byte[] fromMachine(Machine machine, Palette palette, int scale = 1)
-    {
-        if (machine.platform == Platform.Chip8)
-        {
-            return fromMonochrome(machine.display, Machine.displayWidth, Machine.displayHeight, palette, scale);
-        }
-        return fromVideo(machine.video, palette, scale);
-    }
+    public static byte[] fromMachine(Machine machine, Palette palette, int scale = 1) =>
+        fromFrame(FrameImage.fromMachine(machine, palette), scale);
 
     public static void writeFile(string path, byte[] ppm) => File.WriteAllBytes(path, ppm);
 
-    static byte[] build(int width, int height, int scale, Palette palette, Func<int, int, int> colorAt)
+    public static byte[] fromFrame(FrameImage frame, int scale = 1)
     {
         if (scale < 1)
         {
             throw new ArgumentOutOfRangeException(nameof(scale), "scale must be at least 1");
         }
 
-        int outWidth = width * scale;
-        int outHeight = height * scale;
+        int outWidth = frame.width * scale;
+        int outHeight = frame.height * scale;
         byte[] header = Encoding.ASCII.GetBytes("P6\n" + outWidth + " " + outHeight + "\n255\n");
 
         var output = new byte[header.Length + outWidth * outHeight * 3];
         Array.Copy(header, output, header.Length);
 
         int cursor = header.Length;
-        for (int y = 0; y < height; y++)
+        int source = 0;
+        for (int y = 0; y < frame.height; y++)
         {
             int rowStart = cursor;
-            for (int x = 0; x < width; x++)
+            for (int x = 0; x < frame.width; x++)
             {
-                Rgb color = palette.resolve(colorAt(x, y));
                 for (int sx = 0; sx < scale; sx++)
                 {
-                    output[cursor++] = color.r;
-                    output[cursor++] = color.g;
-                    output[cursor++] = color.b;
+                    output[cursor++] = frame.rgba[source];
+                    output[cursor++] = frame.rgba[source + 1];
+                    output[cursor++] = frame.rgba[source + 2];
                 }
+                source += FrameImage.bytesPerPixel;
             }
 
             int rowBytes = outWidth * 3;

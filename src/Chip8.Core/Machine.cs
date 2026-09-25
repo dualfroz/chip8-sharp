@@ -51,7 +51,7 @@ public sealed partial class Machine
     public Quirks quirks { get; }
 
     readonly bool[] keypadPrevious = new bool[keyCount];
-    readonly Random rng;
+    readonly SubtractiveRandom rng;
 
     public Machine(Quirks? quirks = null, int? randomSeed = null, Platform platform = Platform.Chip8)
     {
@@ -59,7 +59,7 @@ public sealed partial class Machine
         this.quirks = quirks ?? defaultQuirks(platform);
         memory = new byte[platform == Platform.XoChip ? xoMemorySize : memorySize];
         video = new Video();
-        rng = randomSeed.HasValue ? new Random(randomSeed.Value) : new Random();
+        rng = new SubtractiveRandom(randomSeed ?? Random.Shared.Next());
         reset();
     }
 

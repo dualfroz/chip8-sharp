@@ -1,0 +1,10 @@
+wait 2
+hold 9 for 12
+wait 4
+assert pixel 31 14 off
+hold 8 for 6
+wait 4
+frame 60: press 7
+frame 64: release 7
+wait 4
+assert running

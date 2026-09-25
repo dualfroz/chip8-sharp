@@ -89,7 +89,7 @@ public sealed partial class Machine
                 break;
 
             case 0xC000:
-                v[x] = (byte)(rng.Next(256) & nn);
+                v[x] = (byte)(rng.nextBelow(256) & nn);
                 break;
 
             case 0xD000:

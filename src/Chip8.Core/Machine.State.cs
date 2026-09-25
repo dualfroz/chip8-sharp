@@ -7,7 +7,8 @@ namespace Chip8.Core;
 public sealed partial class Machine
 {
     static readonly byte[] stateMagic = Encoding.ASCII.GetBytes("C8ST");
-    const byte stateVersion = 1;
+    const byte stateVersion = 2;
+    const byte stateVersionWithoutRandom = 1;
 
     public byte[] saveState()
     {
@@ -29,7 +30,7 @@ public sealed partial class Machine
         using var stream = new MemoryStream(data);
         using var reader = new BinaryReader(stream, Encoding.ASCII);
 
-        readHeader(reader);
+        byte version = readHeader(reader);
         var savedPlatform = (Platform)reader.ReadByte();
         if (savedPlatform != platform)
         {
@@ -38,7 +39,7 @@ public sealed partial class Machine
         }
 
         readQuirksInto(reader, quirks);
-        readBody(reader);
+        readBody(reader, version);
     }
 
     public static Machine restore(byte[] data)
@@ -46,16 +47,16 @@ public sealed partial class Machine
         using var stream = new MemoryStream(data);
         using var reader = new BinaryReader(stream, Encoding.ASCII);
 
-        readHeader(reader);
+        byte version = readHeader(reader);
         var savedPlatform = (Platform)reader.ReadByte();
         Quirks savedQuirks = readQuirks(reader);
 
         var machine = new Machine(savedQuirks, null, savedPlatform);
-        machine.readBody(reader);
+        machine.readBody(reader, version);
         return machine;
     }
 
-    static void readHeader(BinaryReader reader)
+    static byte readHeader(BinaryReader reader)
     {
         byte[] magic = reader.ReadBytes(stateMagic.Length);
         for (int index = 0; index < stateMagic.Length; index++)
@@ -67,10 +68,11 @@ public sealed partial class Machine
         }
 
         byte version = reader.ReadByte();
-        if (version != stateVersion)
+        if (version != stateVersion && version != stateVersionWithoutRandom)
         {
             throw new InvalidDataException("unsupported save state version " + version);
         }
+        return version;
     }
 
     void writeQuirks(BinaryWriter writer)
@@ -139,9 +141,10 @@ public sealed partial class Machine
         writer.Write(waitingForKey);
 
         video.writeTo(writer);
+        rng.writeTo(writer);
     }
 
-    void readBody(BinaryReader reader)
+    void readBody(BinaryReader reader, byte version)
     {
         int memoryLength = reader.ReadInt32();
         if (memoryLength != memory.Length)
@@ -182,6 +185,10 @@ public sealed partial class Machine
         waitingForKey = reader.ReadBoolean();
 
         video.readFrom(reader);
+        if (version != stateVersionWithoutRandom)
+        {
+            rng.readFrom(reader);
+        }
     }
 
     static void readExact(BinaryReader reader, byte[] target)
