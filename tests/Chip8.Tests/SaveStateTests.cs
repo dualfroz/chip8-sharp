@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Chip8.Core;
 using Xunit;
 
@@ -85,6 +87,110 @@ public class SaveStateTests
         Assert.Equal(2, restored.planeMask);
         Assert.Equal(2, restored.video.colorAt(0, 0));
         Assert.Equal(0xC3, restored.audioPattern[3]);
+    }
+
+    static Machine randomDrawer(Platform platform) =>
+        TestHarness.withProgram(platform, 0xC0FF, 0xC11F, 0xF029, 0xD015, 0x1200);
+
+    static (byte[] draws, byte[] finalState) runRandomFrames(Machine machine, int frames)
+    {
+        var draws = new List<byte>();
+        for (int frame = 0; frame < frames; frame++)
+        {
+            machine.runFrame(TestHarness.instructionsPerFrame);
+            draws.Add(machine.v[0]);
+            draws.Add(machine.v[1]);
+        }
+        return (draws.ToArray(), machine.saveState());
+    }
+
+    [Theory]
+    [InlineData(Platform.Chip8)]
+    [InlineData(Platform.SuperChip)]
+    [InlineData(Platform.XoChip)]
+    public void loadedStateReplaysTheSameRandomNumbers(Platform platform)
+    {
+        var machine = randomDrawer(platform);
+        runRandomFrames(machine, 20);
+        byte[] state = machine.saveState();
+        var (expectedDraws, expectedState) = runRandomFrames(machine, 30);
+
+        machine.loadState(state);
+        var (draws, finalState) = runRandomFrames(machine, 30);
+
+        Assert.True(expectedDraws.Distinct().Count() > 20);
+        Assert.Equal(expectedDraws, draws);
+        Assert.Equal(expectedState, finalState);
+    }
+
+    [Fact]
+    public void restoredMachineReplaysTheSameRandomNumbers()
+    {
+        var machine = randomDrawer(Platform.XoChip);
+        runRandomFrames(machine, 20);
+        byte[] state = machine.saveState();
+        var (expectedDraws, expectedState) = runRandomFrames(machine, 30);
+
+        var (draws, finalState) = runRandomFrames(Machine.restore(state), 30);
+
+        Assert.Equal(expectedDraws, draws);
+        Assert.Equal(expectedState, finalState);
+    }
+
+    static byte[] asVersionOne(byte[] state)
+    {
+        byte[] legacy = state[..^SubtractiveRandom.stateSize];
+        legacy[4] = 1;
+        return legacy;
+    }
+
+    static byte[] randomTail(byte[] state) => state[^SubtractiveRandom.stateSize..];
+
+    [Fact]
+    public void versionOneStateLoadsAndKeepsTheCurrentRandomSequence()
+    {
+        var machine = randomDrawer(Platform.Chip8);
+        var twin = randomDrawer(Platform.Chip8);
+        runRandomFrames(machine, 5);
+        runRandomFrames(twin, 5);
+        byte[] legacy = asVersionOne(machine.saveState());
+        byte[] savedRegisters = (byte[])machine.v.Clone();
+        ushort savedPc = machine.pc;
+
+        runRandomFrames(machine, 10);
+        runRandomFrames(twin, 10);
+        machine.loadState(legacy);
+
+        Assert.Equal(savedRegisters, machine.v);
+        Assert.Equal(savedPc, machine.pc);
+        Assert.Equal(randomTail(twin.saveState()), randomTail(machine.saveState()));
+    }
+
+    [Fact]
+    public void versionOneStateRestoresIntoANewMachine()
+    {
+        var machine = randomDrawer(Platform.SuperChip);
+        runRandomFrames(machine, 5);
+        byte[] legacy = asVersionOne(machine.saveState());
+
+        Machine restored = Machine.restore(legacy);
+
+        Assert.Equal(Platform.SuperChip, restored.platform);
+        Assert.Equal(machine.v, restored.v);
+        Assert.Equal(machine.pc, restored.pc);
+        Assert.Equal(2, restored.saveState()[4]);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(3)]
+    public void unknownStateVersionsAreRejected(byte version)
+    {
+        byte[] state = randomDrawer(Platform.Chip8).saveState();
+        state[4] = version;
+
+        var error = Assert.Throws<InvalidDataException>(() => Machine.restore(state));
+        Assert.Equal("unsupported save state version " + version, error.Message);
     }
 
     [Fact]

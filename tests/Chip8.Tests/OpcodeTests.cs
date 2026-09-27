@@ -26,8 +26,8 @@ public class OpcodeTests
     public void callPushesReturnAddressAndReturnRestoresIt()
     {
         var machine = new Machine(Quirks.modern(), 1);
-        machine.memory[0x200] = 0x22; machine.memory[0x201] = 0x06; // 2206 call 0x206
-        machine.memory[0x206] = 0x00; machine.memory[0x207] = 0xEE; // 00EE ret
+        machine.memory[0x200] = 0x22; machine.memory[0x201] = 0x06;
+        machine.memory[0x206] = 0x00; machine.memory[0x207] = 0xEE;
         machine.step();
         Assert.Equal(0x206, machine.pc);
         Assert.Equal(1, machine.sp);
@@ -105,7 +105,7 @@ public class OpcodeTests
     public void drawSetsPixelsAndReportsCollision()
     {
         var machine = new Machine(Quirks.modern(), 1);
-        machine.memory[0x200] = 0xD0; machine.memory[0x201] = 0x11; // DXYN draw 1 row at (V0,V1)
+        machine.memory[0x200] = 0xD0; machine.memory[0x201] = 0x11;
         machine.i = 0x300;
         machine.memory[0x300] = 0b1010_0000;
         machine.v[0] = 0; machine.v[1] = 0;
@@ -125,7 +125,7 @@ public class OpcodeTests
     public void drawClipsAtRightAndBottomEdges()
     {
         var machine = new Machine(Quirks.modern(), 1);
-        machine.memory[0x200] = 0xD0; machine.memory[0x201] = 0x11; // DXYN draw 1 row at (V0,V1)
+        machine.memory[0x200] = 0xD0; machine.memory[0x201] = 0x11;
         machine.i = 0x300;
         machine.memory[0x300] = 0b1111_1111;
         machine.v[0] = 62; machine.v[1] = 0;

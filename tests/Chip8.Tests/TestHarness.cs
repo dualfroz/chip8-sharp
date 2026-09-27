@@ -1,12 +1,13 @@
 using System;
 using System.IO;
 using Chip8.Core;
+using Chip8.Core.Assembly;
 
 namespace Chip8.Tests;
 
 static class TestHarness
 {
-    static string repoRoot()
+    static string romDirectory()
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null && !Directory.Exists(Path.Combine(dir.FullName, "roms")))
@@ -16,13 +17,16 @@ static class TestHarness
 
         if (dir is null)
         {
-            throw new DirectoryNotFoundException("Could not locate repo root with a 'roms' directory.");
+            throw new DirectoryNotFoundException("Could not locate the 'roms' test directory.");
         }
 
-        return dir.FullName;
+        return Path.Combine(dir.FullName, "roms");
     }
 
-    public static byte[] romBytes(string name) => File.ReadAllBytes(Path.Combine(repoRoot(), "roms", name));
+    public static byte[] romBytes(string name) => File.ReadAllBytes(Path.Combine(romDirectory(), name));
+
+    public static byte[] assembledRom(string sourceName) =>
+        Assembler.assembleRom(File.ReadAllText(Path.Combine(romDirectory(), sourceName)));
 
     public static string goldenText(string name) =>
         File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "goldens", name));
@@ -56,10 +60,13 @@ static class TestHarness
 
     public const int instructionsPerFrame = 11;
 
-    public static Machine runRom(string name, int cycles, Quirks? quirks = null)
+    public static Machine runRom(string name, int cycles, Quirks? quirks = null) =>
+        runProgram(romBytes(name), cycles, quirks);
+
+    public static Machine runProgram(byte[] rom, int cycles, Quirks? quirks = null)
     {
         var machine = new Machine(quirks ?? Quirks.modern(), randomSeed: 1);
-        machine.loadRom(romBytes(name));
+        machine.loadRom(rom);
         for (int cycle = 0; cycle < cycles; cycle++)
         {
             machine.step();
